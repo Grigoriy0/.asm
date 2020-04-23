@@ -612,14 +612,14 @@ _GAME_INT_DIR_R:
     mov al, DIR_RIGHT
     mov cs:_player_mov_dir, al
     jmp _GAME_INT_STEP
-        
+
 _GAME_INT_DIR_D:
     cmp ax, DOWN_PRESSED
     jne _GAME_INT_DIR_L
     
     mov al, DIR_DOWN
     mov cs:_player_mov_dir, al
-    jmp _GAME_INT_STEP        
+    jmp _GAME_INT_STEP
 
 _GAME_INT_DIR_L:
     cmp ax, LEFT_PRESSED
@@ -627,7 +627,7 @@ _GAME_INT_DIR_L:
     
     mov al, DIR_LEFT
     mov cs:_player_mov_dir, al
-    jmp _GAME_INT_STEP   
+    jmp _GAME_INT_STEP
     
 _GAME_INT_DIR_U:
     cmp ax, UP_PRESSED
@@ -635,7 +635,7 @@ _GAME_INT_DIR_U:
     
     mov al, DIR_UP
     mov cs:_player_mov_dir, al
-    jmp _GAME_INT_STEP  
+    jmp _GAME_INT_STEP
 _GAME_INT_STEP:
     call player_mov
     
