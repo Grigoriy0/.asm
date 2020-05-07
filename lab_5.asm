@@ -48,15 +48,15 @@ get_name proc
     lea di, filename
 GET_NAME_LOOP:
     mov al, es:[si]   ;Заносим в al посимвольно значение командной строки
-    cmp al, 0Dh       ;0Dh - товарищ Enter, он же возврат каретки
+    cmp al, 0Dh
     je GET_NAME_END
-    mov [di], al      ;заносим символ из ком.строки в filename
-    inc di            ;на следующий символ
+    mov [di], al
+    inc di
     inc si
     jmp GET_NAME_LOOP 
 GET_NAME_END:
     
-    pop si            ;Восстанавливаем регистры
+    pop si
     pop di
     pop cx
     pop ax
@@ -69,7 +69,7 @@ fopen  proc
     mov al, 2           ;Режим доступа (чтение и запись)
     lea dx, filename
     int 21h
-    jc OPEN_ERROR       ;Словили маслину - выходим, CF = 1
+    jc OPEN_ERROR       ; CF = 1
     mov handle, ax
     ret
 fopen endp
