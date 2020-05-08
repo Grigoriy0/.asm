@@ -1,25 +1,62 @@
+﻿;.386
+;.model flat,stdcall
 .model small
 .stack 100h
 .data
+    bufSize         equ 128
+    LINE_IS_EMPTY   equ 1
+    LINE_NOT_EMPTY  equ 0
+    CR              equ 13
+    LF              equ 10
+    SPACE           equ 20h
+    TAB             equ 9
+
     filename        db 80 dup(0)
-    buffer          db 128 dup(0)
-    buf             db 0
-    handle          dw 0
-    counter         dw 0
-    c               dw 0
+    out_file        db "output.txt", 0, '$'
+    buffer          db bufSize dup(0)
+    bufEnd          db 0
+    
+    handle_in       dw 0
+    handle_out      dw 0
     flag            db 0
-    space_counter   dw 0  
-      
+    readed          dw 0
+    start_index     dw 0
+    end_index       dw 0
+
+
     closeString     db "Close the file$"
     openFileError   db "Error of open!$"
     openString      db "Open the file$"
-    newLine         db 13, 10, '$'
+    newLine         db CR, LF, '$'
     errorString     db "Error!$"
     exitString      db "Exit$"
-    lastSymbol      db 0
-  
+    bf_e db "buffer ends$"
+    endline db "end of line$"
+    _w db "write$"
+    _r db "read$"
+    ad db "access denied$"
+    wi db "wrong handle$"
+    testt db "test$"
+    
 .code 
-   
+
+
+log macro string
+    pusha
+    lea dx, string
+    call outputString
+    call printNewLine
+    popa
+endm
+
+to_cx_dx macro var
+    push si
+    lea si, var
+    mov cx, [si]
+    mov dx, [si + 2]
+    pop si
+endm
+
 ;Вывод строки
 outputString proc
     mov ah, 09h
@@ -64,160 +101,199 @@ GET_NAME_END:
 get_name endp
 
 ;Открытие файла для чтения и записи
-fopen  proc 
+fopen_exist  proc 
     mov ah, 3dh         ;3Dh - открыть существующий файл
-    mov al, 2           ;Режим доступа (чтение и запись)
+    mov al, 0           ;Режим доступа чтение
     lea dx, filename
     int 21h
     jc OPEN_ERROR       ; CF = 1
-    mov handle, ax
+    mov handle_in, ax
     ret
-fopen endp
+fopen_exist endp
+
+fopen_new  proc
+    mov cx, 0
+    lea dx, out_file
+    mov ah, 3Ch         ;3Ch - создать новый файл (переписать существующий)
+    int 21h
+    jc OPEN_ERROR
+    mov handle_out, ax
+    ret
+fopen_new endp
 
 ;Закрытие файла
-fclose proc 
+fclose macro handle
     mov ah, 3eh         ;3Eh - закрытие файла
     mov bx, handle
     int 21h
-    jc ERROR
-    ret
-fclose endp
+endm
 
+; read bufSize into buffer
+; проходить по буферу и :
+; в течении строки проверять, есть ли там другие символы, кроме CR, LF, SPACE, TAB => flag = 1
+; if (flag == 1) continue to 1
+; записать в output текущую строку
+; LF - 10 (Enter)
+; CR - 13
 
-_CHECK_TAB:
-    cmp byte ptr [si], 9
-    jne notWhiteSpace
-    jmp _NEXT
-    
-;Удаление пустых строк
-space proc
-    mov counter, 0
-    mov space_counter, 0
-    i:
-    mov cx, 128     ; В cx количество байт для чтения
-    mov bx, handle  ; В bx дескриптор
-    lea dx, buffer  ; В dx адрес текста для считывания
-    mov ah, 3fh     ; 3f - читать файл
+; SP - 20h
+; TAB - 9
+
+write proc
+;пишем в файл
+;bx - идентификатор, 
+;ds:dx - адрес буфера с данными
+;cx - число байтов для записи
+    log _w
+    push ax
+    push bx
+    push cx
+    push dx
+    mov ah, 40h
+    mov bx, handle_out
+    mov dx, start_index
+    mov cx, end_index
+    sub cx, start_index
     int 21h
-    jc ERROR
+    jc ERROR_WRITE
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    ret
+write endp
+
+read proc
+    log _r
+;читаем из файла
+;bx - идентификатор, 
+;ds:dx - адрес буфера с данными
+;cx - число байтов для чтения
+    push ax
+    push bx
+    push cx
+    push dx
+    mov ah, 3fh
+    mov cx, bufSize
+    mov bx, handle_in
+    lea dx, buffer
+    int 21h
     cmp ax, 0
     je _CLOSE        ; конец файла
-    
-    push ax         ; сохраняем колличество прочитанных байт
-    mov c, 0        ; Счётчик прочитанных символов
-    mov flag, 0
-    xor si, si
     lea si, buffer
-    cmp byte ptr [si], 0
-    je _CLOSE     
-
-        _COMPARE:
-            inc c   ; количество символов в строке++
-            cmp  byte ptr [si], 10      ; newline LF
-            je _END_OF_LINE             ; Если конец строки
-            cmp  byte ptr [si], ' '
-            jne _CHECK_TAB
-            _NEXT:
-            pop ax
-            cmp ax, c    ; если прочитали весь буфер(все, что выгружено в буфер)
-            je _END_OF_LINE
-            push ax
-            inc si
-            jmp _COMPARE
-    jmp i
-
-notWhiteSpace:
-    cmp byte ptr [si], 13   ; carriage return
-    je _CRET
+    add si, ax
+    mov [si], 0
+    mov readed, ax  ; сохраняем прочитанное колличество
+    pop dx
+    pop cx
+    pop bx
     pop ax
-    cmp ax, c
-    je _END_OF_LINE
-    push ax
-    mov flag, 1     ; Флаг = 1, значит строка не пустая
+    ret
+read endp
+get_next macro
     inc si
-    jmp _COMPARE
+    mov al, [si]
+endm
 
-;достигли конца строки - чекаем была ли она пустой
-_END_OF_LINE:
-    cmp flag, 1
-    jne _EMPTY
-    
-_NOT_EMPTY:
-;перемещаем указатель
-;bx - идентификатор, cx,dx - расстояние, al = 0 - относительно начала
-    xor ax, ax
-    mov bx, handle
-    mov ah, 42h
-    mov dx, counter
-    xor cx, cx
-    int 21h
-
-;пишем в файл
-;bx - идентификатор, ds:dx - адрес буфера с данными
-;cx - число байтов для записи
-    xor ax, ax
-    mov bx, handle
-    mov ah, 40h
-    mov dx, offset buffer
-    xor cx, cx
-    mov cx, c
-    int 21h
- 
-;добавляем к общему числу прочитанных символов число символов, прочитанных
-;из текущей строки
-    mov ax, counter
-    add ax, c
-    mov counter, ax
-
-    mov ax, counter
-    add ax, space_counter
-    mov counter, ax
-      
-;вновь тягаем указатель, только на этот раз к началу следующей строки
-    xor ax, ax
-    mov bx, handle
-    mov ah, 42h
-    mov dx, counter
-    xor cx, cx
-    int 21h
-
-    mov ax, counter
-    sub ax, space_counter
-    mov counter, ax
-    
-    jmp i 
-
-_EMPTY:
-;обновляем значение считанных символов и символов в пустой строке
-    mov ax, c
-    add space_counter, ax
-    mov ax, counter
-    add ax, space_counter
-    mov counter, ax
-
-;перемещаем указатель к концу пустой строки
-    xor ax, ax
-    mov bx, handle
-    mov ah, 42h
-    mov dx, counter
-    xor cx, cx
-    int 21h
-   
-    mov ax, counter
-    sub ax, space_counter
-    mov counter, ax
-
-    jmp i
-
-_CRET:
+if_we_found_end_of_line proc
+    log endline
+    push ax
+    push dx
+_SKIP_CR:
+    cmp al, CR
+    jne _SKIP_LF
+    get_next
+_SKIP_LF:
+    get_next
+_SKIP_O:
+    mov end_index, si
+    cmp flag, LINE_IS_EMPTY
+    je _END_OF_LINE_NO_WRITE
+    call write
+_END_OF_LINE_NO_WRITE:
+    mov dx, end_index
+    mov start_index, dx
+    pop dx
     pop ax
-    cmp ax, c
-    je _END_OF_LINE
-    push ax
-    inc si
-    jmp _COMPARE
+    ret
+if_we_found_end_of_line endp
+
+if_buffer_ends proc
+    log bf_e
+    mov end_index, si
+    cmp flag, LINE_IS_EMPTY
+    je _BUFFER_ENDS_NO_WRITE
+    call write
+_BUFFER_ENDS_NO_WRITE:
+    call read
+    lea si, buffer
+    mov start_index, si
+    mov al, [si]
+    ret
+if_buffer_ends endp
+
+;Удаление пустых строк
+space proc
+
+    call read
+    mov flag, LINE_IS_EMPTY
+    
+    lea si, buffer
+    add si, 3
+    mov start_index, si
+    mov al, [si]
+    _READ_LOOP:
+        cmp al, SPACE
+        ja _SET_FLAG
+        cmp al, 0
+        je _BUFFER_ENDS
+        cmp al, LF
+        je _LINE_ENDS
+        _LINE_ENDS_CONTINUE:
+        ; it's white symbol
+        _BUFFER_ENDS_CONTINUE:
+        cmp al, 0
+        je _BUFFER_ENDS
+        get_next
+    jmp _READ_LOOP
+
+    ret
+_LINE_ENDS:
+    mov flag, LINE_IS_EMPTY
+    call if_we_found_end_of_line
+    jmp _LINE_ENDS_CONTINUE
+_SET_FLAG:
+    mov flag, LINE_NOT_EMPTY
+_SET_FLAG_SKIP_CHARS:
+    get_next
+    cmp al, CR
+    je _SET_FLAG_SKIP_END
+_SET_FLAG_SKIP_CHARS_CHECK_:
+    cmp al, 0
+    je _BUFFER_ENDS
+    jmp _SET_FLAG_SKIP_CHARS
+_SET_FLAG_SKIP_END:
+    call if_we_found_end_of_line
+    jmp _LINE_ENDS_CONTINUE
+_BUFFER_ENDS:
+    call if_buffer_ends
+    jmp _BUFFER_ENDS_CONTINUE
+    ret
 endp
 
+
+ERROR_WRITE:
+    cmp ax, 05h
+    je ERR_AD
+    cmp ax, 06h
+    je ERR_WI
+    jmp ERROR
+ERR_AD:
+    log ad
+    jmp ERROR
+ERR_WI:
+    log wi
+    jmp ERROR
 
 ERROR:
     lea dx, errorString
@@ -236,7 +312,8 @@ BEGIN:
     mov ds, ax
     
     call get_name
-    call fopen
+    call fopen_exist
+    call fopen_new
     
     lea dx, openString
     call outputString
@@ -244,20 +321,9 @@ BEGIN:
     
     call space
 _CLOSE:
-    
-    xor ax, ax
-    mov bx, handle
-    mov ah, 42h 
-    dec counter
-    mov dx, counter
-    xor cx, cx
-    int 21h    
-
-    mov bx, handle
-    mov ah, 40h
-    int 21h
            
-    call fclose 
+    fclose handle_in
+    fclose handle_out
     
     lea dx, closeString  
     call outputString
