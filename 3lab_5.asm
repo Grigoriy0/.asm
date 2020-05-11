@@ -14,9 +14,9 @@
     buf             db 0
     handle          dw 0
     counter         dw 0
-    c               dw 0
+    viewed          dw 0
+    space_counter   dw 0
     flag            db LINE_IS_EMPTY
-    space_counter   dw 0  
       
     closeString     db "Close the file$"
     openFileError   db "Error of open!$"  
@@ -139,14 +139,14 @@ _READ_TO_BUFFER:
     
     push ax
     xor si, si
-    mov c, 0 
+    mov viewed, 0 
     mov flag, LINE_IS_EMPTY
     lea si, buffer
     cmp byte ptr [si], 0
     je _CLOSE
 
         _VIEW_BUFFER:  
-            inc c ; inc count of watched bytes
+            inc viewed ; inc count of viewed bytes
             cmp  byte ptr [si], LF
             je _END_OF_LINE  
             cmp  byte ptr [si], SPACE
@@ -166,7 +166,7 @@ _NOT_WHITE_SPACE:
     cmp byte ptr [si], CR
     je _CRET
     pop ax
-    cmp ax, c
+    cmp ax, viewed
     je _END_OF_LINE
     push ax
     mov flag, LINE_NOT_EMPTY
@@ -179,32 +179,35 @@ _END_OF_LINE:
         
 _NOT_EMPTY:
 
-    xor ax, ax
+    xor ax, ax ; set pointer to start index
     mov bx, handle
     mov ah, 42h
     mov dx, counter
     xor cx, cx
     int 21h 
 
-    xor ax, ax
+    xor ax, ax ; write to number of viewed bytes
     mov bx, handle
     mov ah, 40h
     mov dx, offset buffer
-    xor cx, cx
-    mov cx, c  
+    mov cx, viewed
     int 21h
  
- 
 
+
+    ; lea si, counter
+    ; add_to_si viewed
     mov ax, counter
-    add ax, c
+    add ax, viewed
     mov counter, ax
 
+    ; lea si, counter
+    ; add_to_si space_counter
     mov ax, counter
     add ax, space_counter
     mov counter, ax
 
-
+    ; return pointer to old position
     xor ax, ax
     mov bx, handle
     mov ah, 42h
@@ -212,6 +215,8 @@ _NOT_EMPTY:
     xor cx, cx
     int 21h
 
+    ; lea si, counter
+    ; sub_to_si space_counter
     mov ax, counter
     sub ax, space_counter
     mov counter, ax
@@ -220,8 +225,10 @@ _NOT_EMPTY:
 
 _EMPTY:
 
-    mov ax, c
+    mov ax, viewed
     add space_counter, ax
+    ; lea si, counter
+    ; add_to_si space_counter
     mov ax, counter
     add ax, space_counter
     mov counter, ax
@@ -234,6 +241,8 @@ _EMPTY:
     xor cx, cx
     int 21h
    
+    ; lea si, counter
+    ; sub_to_si space_counter
     mov ax, counter
     sub ax, space_counter
     mov counter, ax
@@ -242,7 +251,7 @@ _EMPTY:
 
 _CRET:
     pop ax
-    cmp ax, c
+    cmp ax, viewed
     je _END_OF_LINE
     push ax
     inc si
