@@ -13,7 +13,7 @@
     buffer          db bufSize dup(0)
     buf             db 0
     handle          dw 0
-    counter         dw 0
+    counter         dd 0
     viewed          dw 0
     space_counter   dw 0
     flag            db LINE_IS_EMPTY
@@ -74,6 +74,40 @@ _INC_SI_JUST_INC:
 inc_si_proc endp
 
 
+sub_to_si macro short
+    push cx
+    push bx
+    lea bx, short
+    mov cx, word ptr [bx]
+_SUB_TO_SI_LOOP:
+    call dec_si_proc
+    loop _SUB_TO_SI_LOOP
+    pop bx
+    pop cx
+endm
+
+
+dec_si_proc proc
+    push ax
+    cmp word ptr [si + 2], 0h
+    jne _DEC_SI_JUST_DEC
+
+    mov ax, [si]
+    dec ax
+    mov word ptr [si], ax
+    mov ax, 0ffffh
+    mov word ptr [si + 2], ax
+    pop ax
+    ret
+_DEC_SI_JUST_DEC:
+    mov ax, [si + 2]
+    dec ax
+    mov word ptr [si + 2], ax
+    pop ax
+    ret    
+dec_si_proc endp
+
+
 get_name proc
     push ax
     push cx
@@ -124,7 +158,9 @@ fclose endp
 
 
 space_delete_proc proc
-mov counter, 0
+lea bx, counter
+mov word ptr [bx], 0
+mov word ptr [bx + 2], 0
 mov space_counter, 0
 _READ_TO_BUFFER:     
     mov cx, bufSize
@@ -153,7 +189,7 @@ _READ_TO_BUFFER:
             jne _CHECK_TAB
             _ITS_TAB:  
             pop ax
-            cmp ax, c
+            cmp ax, viewed
             je _END_OF_LINE
             push ax
             inc si
