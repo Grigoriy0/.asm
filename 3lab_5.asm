@@ -1,8 +1,16 @@
 .model small
 .stack 100h
 .data
+    bufSize         equ 128
+    LINE_IS_EMPTY   equ 1
+    LINE_NOT_EMPTY  equ 0
+    CR              equ 13
+    LF              equ 10
+    SPACE           equ 20h
+    TAB             equ 9
+
     filename        db 80 dup(0)
-    buffer          db 128 dup(0)
+    buffer          db bufSize dup(0)
     buf             db 0    
     handle          dw 0       
     counter         dw 0 
@@ -14,7 +22,7 @@
     errorExeString  db "Atata, ne zapuskay .exe!$"
     openFileError   db "Error of open!$"  
     openString      db "Open the file$" 
-    newLine         db 13, 10, '$'
+    newLine         db CR, LF, '$'
     errorString     db "Error!$"
     exitString      db "Exit$"
     lastSymbol      db 0
@@ -24,14 +32,47 @@
 outputString proc
     mov ah, 09h
     int 21h
-ret 
+    ret
 outputString endp 
 
 printNewLine proc
     lea dx, newLine
     call outputString
-ret
+    ret
 printNewLine endp   
+
+add_to_si macro short
+    push cx
+    push bx
+    lea bx, short
+    mov cx, word ptr [bx]
+_ADD_TO_SI_LOOP:
+    call inc_si_proc
+    loop _ADD_TO_SI_LOOP
+    pop bx
+    pop cx
+endm
+
+
+inc_si_proc proc
+    push ax
+    cmp [si + 2], 0ffffh
+    jne _INC_SI_JUST_INC
+
+    mov ax, [si]
+    add ax, 1
+    mov word ptr [si], ax
+    mov ax, 0
+    mov word ptr [si + 2], ax
+    pop ax
+    ret
+_INC_SI_JUST_INC:
+    mov ax, [si + 2]
+    add ax, 1
+    mov word ptr [si + 2], ax
+    pop ax
+    ret    
+inc_si_proc endp
 
 
 get_name proc
@@ -42,30 +83,23 @@ get_name proc
     xor cx, cx
     mov cl, es:[80h]
     cmp cl, 0
-    je end_get_name
+    je _GET_NAME_END
     mov di, 82h
     lea si, filename
-cicle1:
+_GET_NAME_LOOP:
     mov al, es:[di]
     cmp al, 0Dh
-    je end_get_name
+    je _GET_NAME_END
     mov [si], al
     inc di
     inc si
-    jmp cicle1 
-end_get_name:
-    dec si
-    cmp BYTE PTR [si], 'e'
-    je exeError
-    
-    cmp BYTE PTR [si], 'm'
-    je exeError          
-    
+    jmp _GET_NAME_LOOP 
+_GET_NAME_END:
     pop si
     pop di
     pop cx
     pop ax   
-ret
+    ret
 get_name endp
 
 
@@ -84,18 +118,18 @@ fclose proc
    mov ah, 3eh 
    mov bx, handle 
    int 21h 
-   jc error 
+   jc _ERROR 
 ret
 fclose endp     
 
 
 checkTab:            
-    cmp BYTE PTR [si], 9
+    cmp byte ptr [si], TAB
     jne notWhiteSpace
     jmp next
     
     
-proc space 
+space_proc proc
 mov counter, 0
 mov space_counter, 0
 i:     
@@ -104,7 +138,7 @@ i:
     lea dx, buffer 
     mov ah, 3fh     
     int 21h
-    jc error
+    jc _ERROR
     xor cx, cx
     mov cx, ax 
     jcxz close 
@@ -114,14 +148,14 @@ i:
     mov c, 0 
     mov flag, 0
     lea si, buffer 
-    cmp BYTE PTR [si], 0
+    cmp byte ptr [si], 0
     je close     
             
         k:  
             inc c 
-            cmp  BYTE PTR [si], 10 
+            cmp  byte ptr [si], LF
             je endOfLine  
-            cmp  BYTE PTR [si], ' '
+            cmp  byte ptr [si], SRACE
             jne checkTab
             next:  
             pop ax
@@ -133,7 +167,7 @@ i:
     jmp i
 
 notWhiteSpace:
-    cmp BYTE PTR [si], 13 
+    cmp byte ptr [si], CR
     je cret    
     pop ax
     cmp ax, c
@@ -226,24 +260,17 @@ cret:
 endp     
       
       
-error:
+_ERROR:
     lea dx, errorString
     call outputString
     call printNewLine
-    jmp exit  
-
-exeError:
-    lea dx, errorExeString
-    call outputString
-    call printNewLine
-    jmp exit
-    
+    jmp _EXIT  
       
 openError:
     lea dx, openFileError
     call outputString
     call printNewLine
-    jmp exit  
+    jmp _EXIT  
                
 begin:         
     mov ax, @data
@@ -256,7 +283,7 @@ begin:
     call outputString  
     call printNewLine
     
-    call space 
+    call space_proc 
     jmp close 
       
 close:                                                             
@@ -279,7 +306,7 @@ close:
     call outputString
     call printNewLine
 
-exit:                  
+_EXIT:                  
     lea dx, exitString
     call outputString 
     call printNewLine
