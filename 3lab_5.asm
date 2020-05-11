@@ -2,8 +2,8 @@
 .stack 100h
 .data
     bufSize         equ 128
-    LINE_IS_EMPTY   equ 1
-    LINE_NOT_EMPTY  equ 0
+    LINE_IS_EMPTY   equ 0
+    LINE_NOT_EMPTY  equ 1
     CR              equ 13
     LF              equ 10
     SPACE           equ 20h
@@ -11,15 +11,14 @@
 
     filename        db 80 dup(0)
     buffer          db bufSize dup(0)
-    buf             db 0    
-    handle          dw 0       
-    counter         dw 0 
+    buf             db 0
+    handle          dw 0
+    counter         dw 0
     c               dw 0
-    flag            db 0
+    flag            db LINE_IS_EMPTY
     space_counter   dw 0  
       
     closeString     db "Close the file$"
-    errorExeString  db "Atata, ne zapuskay .exe!$"
     openFileError   db "Error of open!$"  
     openString      db "Open the file$" 
     newLine         db CR, LF, '$'
@@ -104,68 +103,65 @@ get_name endp
 
 
 fopen  proc 
-   mov ah, 3dh
-   mov al, 2
-   lea dx, filename 
-   int 21h 
-   jc openError  
-   mov handle, ax  
-ret
+    mov ah, 3dh
+    mov al, 2
+    lea dx, filename 
+    int 21h 
+    jc openError  
+    mov handle, ax  
+    ret
 fopen endp
 
 
 fclose proc 
-   mov ah, 3eh 
-   mov bx, handle 
-   int 21h 
-   jc _ERROR 
-ret
+    mov ah, 3eh 
+    mov bx, handle 
+    int 21h 
+    jc _ERROR 
+    ret
 fclose endp     
 
 
-checkTab:            
-    cmp byte ptr [si], TAB
-    jne notWhiteSpace
-    jmp next
-    
-    
-space_proc proc
+
+space_delete_proc proc
 mov counter, 0
 mov space_counter, 0
 i:     
     mov cx, 128
     mov bx, handle
     lea dx, buffer 
-    mov ah, 3fh     
+    mov ah, 3fh
     int 21h
     jc _ERROR
     xor cx, cx
-    mov cx, ax 
-    jcxz close 
+    mov cx, ax
+    jcxz _CLOSE
     
     push ax
     xor si, si
     mov c, 0 
-    mov flag, 0
-    lea si, buffer 
+    mov flag, LINE_IS_EMPTY
+    lea si, buffer
     cmp byte ptr [si], 0
-    je close     
-            
+    je _CLOSE
+
         k:  
-            inc c 
+            inc c
             cmp  byte ptr [si], LF
             je endOfLine  
-            cmp  byte ptr [si], SRACE
-            jne checkTab
-            next:  
+            cmp  byte ptr [si], SPACE
+            jne _CHECK_TAB
+            _CHECK_TAB_CONTINUE:  
             pop ax
             cmp ax, c
             je endOfLine
             push ax
             inc si
             jmp k
-    jmp i
-
+_CHECK_TAB:
+    cmp byte ptr [si], TAB
+    jne notWhiteSpace
+    jmp _CHECK_TAB_CONTINUE
 notWhiteSpace:
     cmp byte ptr [si], CR
     je cret    
@@ -173,12 +169,11 @@ notWhiteSpace:
     cmp ax, c
     je endOfLine
     push ax
-    mov flag, 1 
+    mov flag, LINE_NOT_EMPTY
     inc si
     jmp k  
 
 nonEmpty:
-
 
     xor ax, ax
     mov bx, handle
@@ -186,9 +181,6 @@ nonEmpty:
     mov dx, counter
     xor cx, cx
     int 21h 
-
-
-
 
     xor ax, ax
     mov bx, handle
@@ -207,8 +199,8 @@ nonEmpty:
     mov ax, counter
     add ax, space_counter
     mov counter, ax
-      
-         
+
+
     xor ax, ax
     mov bx, handle
     mov ah, 42h
@@ -246,7 +238,7 @@ Empty:
 
     
 endOfLine:
-    cmp flag, 1
+    cmp flag, LINE_NOT_EMPTY
     je  nonEmpty
     jne Empty
         
@@ -283,10 +275,10 @@ begin:
     call outputString  
     call printNewLine
     
-    call space_proc 
-    jmp close 
+    call space_delete_proc 
+    jmp _CLOSE 
       
-close:                                                             
+_CLOSE:                                                             
     
     xor ax, ax
     mov bx, handle
