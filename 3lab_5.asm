@@ -126,8 +126,8 @@ fclose endp
 space_delete_proc proc
 mov counter, 0
 mov space_counter, 0
-i:     
-    mov cx, 128
+_READ_TO_BUFFER:     
+    mov cx, bufSize
     mov bx, handle
     lea dx, buffer 
     mov ah, 3fh
@@ -145,35 +145,39 @@ i:
     cmp byte ptr [si], 0
     je _CLOSE
 
-        k:  
-            inc c
+        _VIEW_BUFFER:  
+            inc c ; inc count of watched bytes
             cmp  byte ptr [si], LF
-            je endOfLine  
+            je _END_OF_LINE  
             cmp  byte ptr [si], SPACE
             jne _CHECK_TAB
-            _CHECK_TAB_CONTINUE:  
+            _ITS_TAB:  
             pop ax
             cmp ax, c
-            je endOfLine
+            je _END_OF_LINE
             push ax
             inc si
-            jmp k
+            jmp _VIEW_BUFFER
 _CHECK_TAB:
     cmp byte ptr [si], TAB
-    jne notWhiteSpace
-    jmp _CHECK_TAB_CONTINUE
-notWhiteSpace:
+    jne _NOT_WHITE_SPACE
+    jmp _ITS_TAB
+_NOT_WHITE_SPACE:
     cmp byte ptr [si], CR
-    je cret    
+    je _CRET
     pop ax
     cmp ax, c
-    je endOfLine
+    je _END_OF_LINE
     push ax
     mov flag, LINE_NOT_EMPTY
     inc si
-    jmp k  
+    jmp _VIEW_BUFFER 
 
-nonEmpty:
+_END_OF_LINE:
+    cmp flag, LINE_NOT_EMPTY
+    jne _EMPTY
+        
+_NOT_EMPTY:
 
     xor ax, ax
     mov bx, handle
@@ -212,9 +216,9 @@ nonEmpty:
     sub ax, space_counter
     mov counter, ax
     
-    jmp i 
+    jmp _READ_TO_BUFFER
 
-Empty:
+_EMPTY:
 
     mov ax, c
     add space_counter, ax
@@ -234,21 +238,15 @@ Empty:
     sub ax, space_counter
     mov counter, ax
 
-    jmp i
+    jmp _READ_TO_BUFFER
 
-    
-endOfLine:
-    cmp flag, LINE_NOT_EMPTY
-    je  nonEmpty
-    jne Empty
-        
-cret:
+_CRET:
     pop ax
     cmp ax, c
-    je endOfLine
+    je _END_OF_LINE
     push ax
     inc si
-    jmp k
+    jmp _VIEW_BUFFER
 endp     
       
       
