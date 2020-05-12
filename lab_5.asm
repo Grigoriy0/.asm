@@ -178,8 +178,8 @@ read proc
     mov bx, handle_in
     lea dx, buffer
     int 21h
-    cmp ax, 0
-    je _CLOSE        ; конец файла
+    cmp ax, cx
+    jb _CLOSE        ; конец файла
     lea si, buffer
     add si, ax
     mov [si], 0
