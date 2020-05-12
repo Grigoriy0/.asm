@@ -13,7 +13,7 @@
     buffer          db bufSize dup(0)
     buf             db 0
     handle          dw 0
-    counter         dd 0
+    counter         dw 2 dup(0)
     viewed          dw 0
     space_counter   dw 0
     flag            db LINE_IS_EMPTY
@@ -40,72 +40,80 @@ printNewLine proc
     ret
 printNewLine endp   
 
-add_to_si macro short
+di_to_cx_dx_proc proc
+    mov dx, [di + 2]
+    mov cx, [di]
+    ret
+di_to_cx_dx_proc endp
+
+add_to_di proc
     push cx
-    push bx
-    lea bx, short
     mov cx, word ptr [bx]
-_ADD_TO_SI_LOOP:
-    call inc_si_proc
-    loop _ADD_TO_SI_LOOP
-    pop bx
+    cmp cx, 0
+    je _ADD_TO_DI_END
+_ADD_TO_DI_LOOP:
+    call inc_di_proc
+    loop _ADD_TO_DI_LOOP
+_ADD_TO_DI_END:
     pop cx
+    ret
 endm
 
+sub_to_di proc
+    push cx
+    mov cx, word ptr [bx]
+    cmp cx, 0
+    je _SUB_TO_DI_END
+_SUB_TO_DI_LOOP:
+    call dec_di_proc
+    loop _SUB_TO_DI_LOOP
+_SUB_TO_DI_END:
+    pop cx
+    ret
+endp
 
-inc_si_proc proc
+
+inc_di_proc proc
     push ax
-    cmp [si + 2], 0ffffh
-    jne _INC_SI_JUST_INC
+    cmp [di + 2], 0ffffh
+    jne _INC_DI_JUST_INC
 
-    mov ax, [si]
+    mov ax, [di]
     add ax, 1
-    mov word ptr [si], ax
+    mov word ptr [di], ax
     mov ax, 0
-    mov word ptr [si + 2], ax
+    mov word ptr [di + 2], ax
     pop ax
     ret
-_INC_SI_JUST_INC:
-    mov ax, [si + 2]
+_INC_DI_JUST_INC:
+    mov ax, [di + 2]
     add ax, 1
-    mov word ptr [si + 2], ax
+    mov word ptr [di + 2], ax
     pop ax
     ret    
-inc_si_proc endp
+inc_di_proc endp
 
 
-sub_to_si macro short
-    push cx
-    push bx
-    lea bx, short
-    mov cx, word ptr [bx]
-_SUB_TO_SI_LOOP:
-    call dec_si_proc
-    loop _SUB_TO_SI_LOOP
-    pop bx
-    pop cx
-endm
 
-
-dec_si_proc proc
+dec_di_proc proc
     push ax
-    cmp word ptr [si + 2], 0h
-    jne _DEC_SI_JUST_DEC
+    cmp word ptr [di + 2], 0h
+    jne _DEC_DI_JUST_DEC
 
-    mov ax, [si]
+    mov ax, [di]
     dec ax
-    mov word ptr [si], ax
+    mov word ptr [di], ax
     mov ax, 0ffffh
-    mov word ptr [si + 2], ax
+    mov word ptr [di + 2], ax
     pop ax
     ret
-_DEC_SI_JUST_DEC:
-    mov ax, [si + 2]
+_DEC_DI_JUST_DEC:
+    mov ax, [di + 2]
     dec ax
-    mov word ptr [si + 2], ax
+    mov word ptr [di + 2], ax
     pop ax
     ret    
-dec_si_proc endp
+dec_di_proc endp
 
 
 get_name proc
@@ -172,7 +180,7 @@ _READ_TO_BUFFER:
     xor cx, cx
     mov cx, ax
     jcxz _CLOSE
-    
+    ошибся гд-то в индексха увеличения-уменьшнения
     push ax
     xor si, si
     mov viewed, 0 
@@ -218,11 +226,11 @@ _NOT_EMPTY:
     xor ax, ax ; set pointer to start index
     mov bx, handle
     mov ah, 42h
-    mov dx, counter
-    xor cx, cx
+    lea di, counter
+    call di_to_cx_dx_proc
     int 21h 
 
-    xor ax, ax ; write to number of viewed bytes
+    xor ax, ax ; write number of viewed bytes
     mov bx, handle
     mov ah, 40h
     mov dx, offset buffer
@@ -231,31 +239,34 @@ _NOT_EMPTY:
  
 
 
-    ; lea si, counter
-    ; add_to_si viewed
-    mov ax, counter
-    add ax, viewed
-    mov counter, ax
+    lea di, counter
+    lea bx, viewed
+    call add_to_di
+    ;mov ax, counter
+    ;add ax, viewed
+    ;mov counter, ax
 
-    ; lea si, counter
-    ; add_to_si space_counter
-    mov ax, counter
-    add ax, space_counter
-    mov counter, ax
+    lea di, counter
+    lea bx, space_counter
+    call add_to_di
+    ;mov ax, counter
+    ;add ax, space_counter
+    ;mov counter, ax
 
     ; return pointer to old position
     xor ax, ax
     mov bx, handle
     mov ah, 42h
-    mov dx, counter
-    xor cx, cx
+    lea di, counter
+    call di_to_cx_dx_proc
     int 21h
 
-    ; lea si, counter
-    ; sub_to_si space_counter
-    mov ax, counter
-    sub ax, space_counter
-    mov counter, ax
+    lea di, counter
+    lea bx, space_counter
+    call sub_to_di
+    ;mov ax, counter
+    ;sub ax, space_counter
+    ;mov counter, ax
     
     jmp _READ_TO_BUFFER
 
@@ -263,25 +274,27 @@ _EMPTY:
 
     mov ax, viewed
     add space_counter, ax
-    ; lea si, counter
-    ; add_to_si space_counter
-    mov ax, counter
-    add ax, space_counter
-    mov counter, ax
+    lea di, counter
+    lea bx, space_counter
+    call add_to_di
+    ;mov ax, counter
+    ;add ax, space_counter
+    ;mov counter, ax
 
 
     xor ax, ax
     mov bx, handle
     mov ah, 42h
-    mov dx, counter
-    xor cx, cx
+    lea di, counter
+    call di_to_cx_dx_proc
     int 21h
    
-    ; lea si, counter
-    ; sub_to_si space_counter
-    mov ax, counter
-    sub ax, space_counter
-    mov counter, ax
+    lea di, counter
+    lea bx, space_counter
+    call sub_to_di
+    ;mov ax, counter
+    ;sub ax, space_counter
+    ;mov counter, ax
 
     jmp _READ_TO_BUFFER
 
